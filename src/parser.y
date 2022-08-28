@@ -1,6 +1,8 @@
 %include {
-    #include "parser_context.h"
+    #include "ast.h"
 }
+
+%token_prefix TOKEN_
 
 // operator precedence
 %left ADD SUB.
