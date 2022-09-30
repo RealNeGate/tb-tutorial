@@ -1,5 +1,7 @@
 *.obj
 *.exe
+*.pdb
+*.ilk
 *.lib
 
 .ninja_deps
