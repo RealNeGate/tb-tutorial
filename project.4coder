@@ -5,6 +5,7 @@ project_name = "Foo";
 patterns = {
 	"*.c",
 	"*.cpp",
+	"*.py",
 	"*.vert",
 	"*.geom",
 	"*.frag",
@@ -34,7 +35,7 @@ command_list = {
 		.save_dirty_files = true,
 		.cursor_at_end = true,
 		.cmd = {
-			{ "build.bat", .os = "win" },
+			{ "py build.py", .os = "win" },
 		},
 	},
 
@@ -45,7 +46,7 @@ command_list = {
 		.save_dirty_files = true,
 		.cursor_at_end = true,
 		.cmd = {
-			{ "bin\foo", .os = "win" },
+			{ "tutorial.exe", .os = "win" },
 		},
 	},
 
