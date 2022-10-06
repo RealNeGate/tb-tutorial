@@ -4,25 +4,22 @@
 #define NL_LEXER_IMPL
 #include "lexer.h"
 
+////////////////////////////////
+// Runtime support
+////////////////////////////////
 static void foo(int param) {
     printf("Hello, World! %d\n", param);
 }
 
-#define EXPR(name, kid) \
-static void parse_expr_ ## name (NL_Lexer* restrict l) { \
-    while () { \
-    } \
-}
-
+////////////////////////////////
+// Parser
+////////////////////////////////
 #define CTABLE_LEN(a) (sizeof(a) / sizeof(a[0]))
 #define CTABLE_GET(a, i) (i < CTABLE_LEN(a) ? a[i] : 0)
 
 static int preds[] = {
-    ['*'] = 10,
-    ['/'] = 10,
-
-    ['+'] = 9,
-    ['-'] = 9,
+    ['*'] = 10, ['/'] = 10,
+    ['+'] = 9,  ['-'] = 9,
 };
 
 static TB_Reg unary(TB_Function* func, NL_Lexer* restrict l) {
@@ -59,11 +56,64 @@ static TB_Reg binop(TB_Function* func, NL_Lexer* restrict l, int min_prec) {
     return lhs;
 }
 
+static TB_Reg expr(TB_Function* func, NL_Lexer* restrict l) {
+    if (NL_TRY_EAT_STRING(l, "if")) {
+        TB_Label true_lbl = tb_basic_block_create(func);
+        TB_Label false_lbl = tb_basic_block_create(func);
+
+        // 'if' expr 'then' ('else' expr)?
+        TB_Reg cond = expr(func, l);
+        tb_inst_if(func, cond, true_lbl, false_lbl);
+        if (!NL_TRY_EAT_STRING(l, "then")) {
+            abort();
+        }
+
+        tb_inst_set_label(func, true_lbl);
+        TB_Reg hit = expr(func, l);
+        TB_Label hit_lbl = tb_inst_get_label(func);
+
+        TB_Reg miss = TB_NULL_REG;
+        TB_Label miss_lbl = 0;
+
+        if (NL_TRY_EAT_STRING(l, "else")) {
+            TB_Label skip_lbl = tb_basic_block_create(func);
+            tb_inst_goto(func, skip_lbl);
+            tb_inst_set_label(func, false_lbl);
+
+            miss = expr(func, l);
+            miss_lbl = tb_inst_get_label(func);
+
+            tb_inst_goto(func, skip_lbl);
+            tb_inst_set_label(func, skip_lbl);
+        } else {
+            tb_inst_set_label(func, false_lbl);
+        }
+
+        return tb_inst_phi2(func, hit_lbl, hit, miss_lbl, miss);
+    } else if (l->token_type == '(') {
+        NL_READ_TOKEN(l);
+
+        TB_Reg tail = TB_NULL_REG;
+        while (l->token_type != ')') {
+            tail = expr(func, l);
+
+            if (l->token_type == ',') {
+                NL_READ_TOKEN(l);
+            }
+        }
+
+        NL_READ_TOKEN(l);
+        return tail;
+    } else {
+        return binop(func, l, 0);
+    }
+}
+
 static TB_Reg parse(TB_Function* func, const char* text) {
     NL_Lexer l = { text };
 
     NL_READ_TOKEN(&l);
-    return binop(func, &l, 0);
+    return expr(func, &l);
 }
 
 int main(void) {
@@ -80,7 +130,7 @@ int main(void) {
         func = tb_function_create(mod, "entry", TB_LINKAGE_PUBLIC);
         tb_function_set_prototype(func, proto);
 
-        TB_Reg result = parse(func, "16 + 4");
+        TB_Reg result = parse(func, "(16 + 4*4, if 16 + 16 then 6 else 0)");
         tb_inst_vcall(func, TB_TYPE_VOID, tb_inst_param(func, 0), 1, &result);
         tb_inst_ret(func, TB_NULL_REG);
 
